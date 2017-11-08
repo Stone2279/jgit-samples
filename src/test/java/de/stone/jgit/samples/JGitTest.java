@@ -15,6 +15,8 @@ import java.util.stream.StreamSupport;
 
 import org.apache.commons.io.FileUtils;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.MergeResult;
+import org.eclipse.jgit.api.MergeResult.MergeStatus;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.lib.Constants;
@@ -26,10 +28,8 @@ import org.junit.Test;
 
 public class JGitTest {
 
-	private File parentDir = new File("D:/eigene dateien/Spielwiese/git");
-
-	private File jgitDir = new File(parentDir, "jgit");
-	private File existingDir = new File(parentDir, "existing");
+	private File jgitDir = new File("jgit");
+	private File existingDir = new File("existing");
 
 	@Before
 	public void init() throws Exception {
@@ -287,6 +287,121 @@ public class JGitTest {
 		
 		// TODO: check jgit documentation for more info about diffs
 		
+	}
+	
+	@Test
+	public void mergeFastForward() throws Exception
+	{
+		Git git = initialSetup();
+		
+		// create new branch and checkout
+		git.checkout().setCreateBranch(true).setName("my-branch").call();
+		
+		// do some changes and commit
+		editFile(new File(existingDir, "test1.txt"));
+		editFile(new File(existingDir, "test2.txt"));
+		
+		git.add().addFilepattern(".").call();
+		git.commit().setMessage("some changes").call();
+		
+		// merge
+		git.checkout().setName("master").call();
+		MergeResult mergeResult = git.merge().include(git.getRepository().findRef("my-branch")).call();
+		
+		assertTrue(mergeResult.getMergeStatus().isSuccessful());
+		assertEquals(MergeStatus.FAST_FORWARD, mergeResult.getMergeStatus());
+	}
+	
+	@Test
+	public void mergeWithAutoCommit() throws Exception
+	{
+		Git git = initialSetup();
+				
+		// create new branch and checkout
+		git.checkout().setCreateBranch(true).setName("my-branch").call();
+		
+		// do some changes and commit
+		editFile(new File(existingDir, "test1.txt"));
+		editFile(new File(existingDir, "test2.txt"));
+		
+		git.add().addFilepattern(".").call();
+		git.commit().setMessage("some changes on branch").call();
+		
+		// back to master
+		git.checkout().setName("master").call();
+		
+		// do some changes on master and commit
+		editFile(new File(existingDir, "test3.txt"));
+		git.add().addFilepattern(".").call();
+		git.commit().setMessage("some changes on master").call();
+		
+		// merge
+		MergeResult mergeResult = git.merge().include(git.getRepository().findRef("my-branch")).call();
+		
+		assertTrue(mergeResult.getMergeStatus().isSuccessful());
+		assertEquals(MergeStatus.MERGED, mergeResult.getMergeStatus());
+	}
+	
+	@Test
+	public void mergeWithoutAutoCommit() throws Exception
+	{
+		Git git = initialSetup();
+				
+		// create new branch and checkout
+		git.checkout().setCreateBranch(true).setName("my-branch").call();
+		
+		// do some changes and commit
+		editFile(new File(existingDir, "test1.txt"));
+		editFile(new File(existingDir, "test2.txt"));
+		
+		git.add().addFilepattern(".").call();
+		git.commit().setMessage("some changes on branch").call();
+		
+		// back to master
+		git.checkout().setName("master").call();
+		
+		// do some changes on master and commit
+		editFile(new File(existingDir, "test3.txt"));
+		git.add().addFilepattern(".").call();
+		git.commit().setMessage("some changes on master").call();
+		
+		// merge
+		MergeResult mergeResult = git.merge().setCommit(false)
+				.include(git.getRepository().findRef("my-branch")).call();
+		
+		assertTrue(mergeResult.getMergeStatus().isSuccessful());
+		assertEquals(MergeStatus.MERGED_NOT_COMMITTED, mergeResult.getMergeStatus());
+	}
+	
+	@Test
+	public void mergeWithConflicts() throws Exception
+	{
+		Git git = initialSetup();
+		
+		// create new branch and checkout
+		git.checkout().setCreateBranch(true).setName("my-branch").call();
+		
+		// do some changes and commit
+		editFile(new File(existingDir, "test1.txt"));
+		editFile(new File(existingDir, "test2.txt"));
+		
+		git.add().addFilepattern(".").call();
+		git.commit().setMessage("some changes on branch").call();
+		
+		// back to master
+		git.checkout().setName("master").call();
+		
+		// do some changes on master and commit
+		editFile(new File(existingDir, "test1.txt"));
+		editFile(new File(existingDir, "test2.txt"));
+		git.add().addFilepattern(".").call();
+		git.commit().setMessage("some changes on master").call();
+		
+		// merge
+		MergeResult mergeResult = git.merge().include(git.getRepository().findRef("my-branch")).call();
+		
+		assertFalse(mergeResult.getMergeStatus().isSuccessful());
+		assertEquals(MergeStatus.CONFLICTING, mergeResult.getMergeStatus());
 	}
 
 	private Git initExisting() throws Exception {
