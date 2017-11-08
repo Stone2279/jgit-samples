@@ -14,6 +14,8 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import org.apache.commons.io.FileUtils;
+import org.eclipse.jgit.api.CherryPickResult;
+import org.eclipse.jgit.api.CherryPickResult.CherryPickStatus;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.MergeResult;
 import org.eclipse.jgit.api.MergeResult.MergeStatus;
@@ -163,7 +165,7 @@ public class JGitTest {
 	}
 
 	@Test
-	public void branchFromTag() throws Exception {
+	public void createBranchFromTag() throws Exception {
 
 		Git git = initialSetup();
 		
@@ -411,6 +413,43 @@ public class JGitTest {
 		Status status = git.status().call();
 		assertTrue(status.isClean());
 	}
+	
+	@Test
+	public void cherryPick() throws Exception
+	{
+		Git git = initialSetup();
+		
+		// create new branch and checkout
+		git.checkout().setCreateBranch(true).setName("my-branch").call();
+		
+		// do some changes and commit
+		editFile(new File(existingDir, "test1.txt"));
+		editFile(new File(existingDir, "test2.txt"));
+		
+		git.add().addFilepattern(".").call();
+		git.commit().setMessage("some changes on branch").call();
+		
+		// commit some more changes
+		editFile(new File(existingDir, "test1.txt"));
+		editFile(new File(existingDir, "test2.txt"));
+		
+		git.add().addFilepattern(".").call();
+		git.commit().setMessage("some more changes on branch").call();
+		
+		// back to master
+		git.checkout().setName("master").call();
+		
+		//cherrypick only the first commit from branch
+		Iterable<RevCommit> logs = git.log().add(git.getRepository().resolve("my-branch")).call();
+		List<RevCommit> logEntries = StreamSupport.stream(logs.spliterator(), false)
+			.collect(Collectors.toList());
+		
+		assertEquals("some changes on branch", logEntries.get(1).getShortMessage());
+		CherryPickResult result = git.cherryPick().include(logEntries.get(1)).call();
+		
+		assertEquals(CherryPickStatus.OK, result.getStatus());
+		assertEquals(1, result.getCherryPickedRefs().size());
+	}
 
 	private Git initExisting() throws Exception {
 
@@ -432,7 +471,7 @@ public class JGitTest {
 	
 	private void editFile(final File file) throws IOException {
 		
-		FileUtils.writeStringToFile(file, "\n" + UUID.randomUUID().toString() + "\n", Charset.forName("utf-8"),true);
+		FileUtils.writeStringToFile(file, UUID.randomUUID().toString() + "\n", Charset.forName("utf-8"), true);
 	}
 	
 	private class LogEntry {
