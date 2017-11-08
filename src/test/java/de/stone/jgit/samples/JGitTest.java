@@ -17,6 +17,8 @@ import org.apache.commons.io.FileUtils;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.MergeResult;
 import org.eclipse.jgit.api.MergeResult.MergeStatus;
+import org.eclipse.jgit.api.ResetCommand.ResetType;
+import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.lib.Constants;
@@ -402,6 +404,12 @@ public class JGitTest {
 		
 		assertFalse(mergeResult.getMergeStatus().isSuccessful());
 		assertEquals(MergeStatus.CONFLICTING, mergeResult.getMergeStatus());
+		assertEquals(2, mergeResult.getConflicts().size());
+		
+		// undo the merge
+		git.reset().setMode(ResetType.HARD).call();
+		Status status = git.status().call();
+		assertTrue(status.isClean());
 	}
 
 	private Git initExisting() throws Exception {
